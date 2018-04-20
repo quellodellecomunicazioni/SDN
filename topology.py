@@ -104,8 +104,9 @@ class SimpleSwitch(app_manager.RyuApp):
         links_list = get_link(self, None)
         links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
 	print "links:", links
+	links2 = [i[:2] for i in links]
 	G = nx.Graph()			
 	G.add_nodes_from(switches)
-	G.add_edges_from(links)
+	G.add_edges_from(links2)
 	nx.draw(G)
 	plt.show()
