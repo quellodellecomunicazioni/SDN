@@ -1,5 +1,4 @@
 # to run this use "ryu-manager --observe-links topology.py" 
-# the programs works fine with simple topologies but still gives multiple outputs when working with tree topologies
 # be sure you installed networkx and matplotlib
 
 from ryu.base import app_manager
