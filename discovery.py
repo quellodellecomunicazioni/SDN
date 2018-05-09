@@ -8,7 +8,8 @@ rules = {}
 
 def progressive_graph(nodes, links):
     '''
-    progressive_graph disegna il grafo della rete in maniera progressiva, aggiungendo di volta in volta i nodi e i collegamenti trovati
+    progressive_graph disegna il grafo della rete in maniera progressiva, 
+    aggiungendo di volta in volta i nodi e i collegamenti trovati
     '''
     G = nx.Graph()
     G.add_nodes_from(nodes)
@@ -83,4 +84,22 @@ for root in raw_nodes:
         if edges[j] not in rules:
             add_rule(edges[j])
     #progressive_graph(nodes, edges)
+print(rules)
+
+for i in range(0,len(edges)):
+    t = edges[i][0]
+    r = edges[i][1]
+    s = (r,t)
+    edges.append(s)
+
+indirect_links = []
+for i in range(0,len(nodes)):
+    for j in range(0,len(nodes)):
+        if nodes[i] != nodes[j]:
+            t = (nodes[i], nodes[j])
+            indirect_links.append(t)
+indirect_links = list(set(indirect_links) - set(edges))
+
+for i in range(0, len(indirect_links)):
+    add_rule(indirect_links[i])
 print(rules)
