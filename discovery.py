@@ -1,14 +1,15 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 
-raw_nodes = [1, 2, 3, 4, 5]
-raw_edges = [(1,2), (1,3), (1,4), (3,5), (4,5)]
+raw_nodes = [3, 2, 1, 4, 5]
+raw_edges = [(1,5), (1,3), (1,4), (4,2)]
 
 rules = {}
 
 def progressive_graph(nodes, links):
     '''
-    progressive_graph disegna il grafo della rete in maniera progressiva, aggiungendo di volta in volta i nodi e i collegamenti trovati
+    progressive_graph disegna il grafo della rete in maniera progressiva,
+    aggiungendo di volta in volta i nodi e i collegamenti trovati
     '''
     G = nx.Graph()
     G.add_nodes_from(nodes)
@@ -89,11 +90,13 @@ for root in raw_nodes:
     #progressive_graph(nodes, edges)
 #print(rules)
 
+# aggiunge i cammini diretti in direzione opposta e ne carica le regole
 for i in range(0,len(edges)):
     t = edges[i][0]
     r = edges[i][1]
     s = (r,t)
     edges.append(s)
+    add_rule(s)
 
 indirect_links = []
 for i in range(0,len(nodes)):
