@@ -8,8 +8,7 @@ rules = {}
 
 def progressive_graph(nodes, links):
     '''
-    progressive_graph disegna il grafo della rete in maniera progressiva, 
-    aggiungendo di volta in volta i nodi e i collegamenti trovati
+    progressive_graph disegna il grafo della rete in maniera progressiva, aggiungendo di volta in volta i nodi e i collegamenti trovati
     '''
     G = nx.Graph()
     G.add_nodes_from(nodes)
@@ -37,6 +36,7 @@ def nodi_collegati(node):
             neighbors.append(edges[i][1])
         elif edges[i][1] == node:
             neighbors.append(edges[i][0])
+    neighbors = clearList(neighbors)
     return neighbors
 
 def shortest_path(path):
@@ -45,6 +45,9 @@ def shortest_path(path):
     '''
     src = path[0]
     dst = path[1]
+    if len(nodi_collegati(src)) == 1:
+        next_hop = nodi_collegati(src)[0]
+        return next_hop
     if path in edges:           # vuol dire che esiste il collegamento diretto
         next_hop = dst
         return next_hop
@@ -84,7 +87,7 @@ for root in raw_nodes:
         if edges[j] not in rules:
             add_rule(edges[j])
     #progressive_graph(nodes, edges)
-print(rules)
+#print(rules)
 
 for i in range(0,len(edges)):
     t = edges[i][0]
