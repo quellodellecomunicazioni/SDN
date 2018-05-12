@@ -1,8 +1,8 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 
-raw_nodes = [3, 2, 1, 4, 5]
-raw_edges = [(1,5), (1,3), (1,4), (4,2)]
+raw_nodes = [1, 2, 3, 4, 5]
+raw_edges = [(1,2), (1,3), (1,4), (3,5), (4,5)]
 
 rules = {}
 
@@ -13,7 +13,9 @@ def progressive_graph(nodes, links):
     '''
     G = nx.Graph()
     G.add_nodes_from(nodes)
-    G.add_edges_from(links)
+    G.add_edges_from(links, weight=1)   # weight = 1 assegna un peso al link
+    # assegno weight = 1 perché i link scoperti in maniera progressiva sono link diretti
+    # per accedere all`attributo di un link del tipo (src,dst) devo fare G[src][dst]['weight']
     nx.draw(G)
     plt.show()
 
@@ -87,7 +89,7 @@ for root in raw_nodes:
     for j in range(0, len(edges)):      # aggiunge solo le regole progressive
         if edges[j] not in rules:
             add_rule(edges[j])
-    #progressive_graph(nodes, edges)
+    progressive_graph(nodes, edges)
 #print(rules)
 
 # aggiunge i cammini diretti in direzione opposta e ne carica le regole
