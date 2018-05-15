@@ -2,7 +2,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 raw_nodes = [1, 2, 3, 4, 5, 6]
-raw_edges = [(1,2), (1,3), (1,4), (2,3), (4,3), (4,6), (5,2)]
+raw_edges = [(1,2), (1,3), (1,4), (2,3), (3,4), (4,6), (5,2)]
 
 rules = {}
 # rules è il dizionario che tiene traccia delle regole, gli elementi sono del tipo
@@ -41,6 +41,7 @@ def shortest_path(path):
     src = path[0]
     dst = path[1]
     mirror_path = (dst, src)
+
     if (path in edges) or (mirror_path in edges):           # vuol dire che esiste il collegamento diretto
         next_hop = dst
         peso = 1
@@ -86,11 +87,9 @@ for root in raw_nodes:
     if root not in nodes:
         nodes.append(root)
     for j in range(0, len(edges)):      # aggiunge solo le regole progressive
-        if edges[j] not in rules:
-            mirror = (edges[j][1], edges[j][0])
-            edges.append(mirror)
-            add_rule(edges[j])
-            add_rule(mirror)
+        mirror = (edges[j][1], edges[j][0])
+        add_rule(edges[j])
+        add_rule(mirror)
         indirect_links = []
         for i in range(0,len(nodes)):       # calcola tutti i percorsi indiretti mancanti
             for j in range(0,len(nodes)):
@@ -109,4 +108,5 @@ for root in raw_nodes:
     nx.draw(G)
     plt.show()
 
-print(rules)
+for k, v in rules.items():
+    print(k, '  -->', '  next hop:',v[0], ',  weight:', v[1])
