@@ -29,6 +29,8 @@ from ryu.topology.api import get_switch, get_link
 import networkx as nx
 import matplotlib.pyplot as plt
 
+G = nx.Graph()
+
 class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     _CONTEXTS = {'stplib': stplib.Stp}
@@ -37,7 +39,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.stp = kwargs['stplib']
-
+		
         # Sample of stplib config.
         #  please refer to stplib.Stp.set_config() for details.
         config = {dpid_lib.str_to_dpid('0000000000000001'):
@@ -126,8 +128,40 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 
     @set_ev_cls(topo_event.EventSwitchEnter)
     def get_topology_data(self, ev):
-		print "welcome"
+	G.clear()
+	# prendo la lista completa degli switches della rete
+	switch_list = get_switch(self, None)
+	switches = [switch.dp.id for switch in switch_list]
+
+	# prendo la lista completa dei links della rete
+	links_list = get_link(self, None)
+	links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+	# lista che non tiene conto della porta di cui usufruisce il link
+	links_no_port = [i[:2] for i in links]
+
+	# aggiungo al grafo lo switch aggiunto e i suoi link entranti/uscenti 
+	G.add_nodes_from(switches)
+	G.add_edges_from(links_no_port)
+
+	nx.draw(G)
+	plt.show()
+	print "switches: ", switches
+	print "links: ", links_no_port
 
     @set_ev_cls(topo_event.EventSwitchLeave)
-    def get_topology(self, ev):
-		print "fare well"
+    def new_topology(self, ev):
+	G.clear()
+	switch_list = get_switch(self, None)
+	switches = [switch.dp.id for switch in switch_list]
+
+	links_list = get_link(self, None)
+	links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+	links_no_port = [i[:2] for i in links]
+
+	G.add_nodes_from(switches)
+	G.add_edges_from(links_no_port)
+
+	nx.draw(G)
+	plt.show()
+	print "switches: ", switches
+	print "links: ", links_no_port
