@@ -39,7 +39,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.stp = kwargs['stplib']
-		
+
         # Sample of stplib config.
         #  please refer to stplib.Stp.set_config() for details.
         config = {dpid_lib.str_to_dpid('0000000000000001'):
@@ -139,7 +139,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 	# lista che non tiene conto della porta di cui usufruisce il link
 	links_no_port = [i[:2] for i in links]
 
-	# aggiungo al grafo lo switch aggiunto e i suoi link entranti/uscenti 
+	# aggiungo al grafo lo switch aggiunto e i suoi link entranti/uscenti
 	G.add_nodes_from(switches)
 	G.add_edges_from(links_no_port)
 
@@ -157,9 +157,14 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 	links_list = get_link(self, None)
 	links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
 	links_no_port = [i[:2] for i in links]
+    real_links = []
 
 	G.add_nodes_from(switches)
-	G.add_edges_from(links_no_port)
+
+    for i in range(0, len(links_no_port)):
+        if (links_no_port[i][0] in switches) and (links_no_port[i][1] in switches):
+            real_links.append(links_no_port[i])
+	G.add_edges_from(real_links)
 
 	nx.draw(G)
 	plt.show()
