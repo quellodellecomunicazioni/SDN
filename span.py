@@ -39,7 +39,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.stp = kwargs['stplib']
-
+		
         # Sample of stplib config.
         #  please refer to stplib.Stp.set_config() for details.
         config = {dpid_lib.str_to_dpid('0000000000000001'):
@@ -128,45 +128,48 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 
     @set_ev_cls(topo_event.EventSwitchEnter)
     def get_topology_data(self, ev):
-	G.clear()
-	# prendo la lista completa degli switches della rete
-	switch_list = get_switch(self, None)
-	switches = [switch.dp.id for switch in switch_list]
+		G.clear()
+		# prendo la lista completa degli switches della rete
+		switch_list = get_switch(self, None)
+		switches = [switch.dp.id for switch in switch_list]
+		G.add_nodes_from(switches)
 
-	# prendo la lista completa dei links della rete
-	links_list = get_link(self, None)
-	links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
-	# lista che non tiene conto della porta di cui usufruisce il link
-	links_no_port = [i[:2] for i in links]
+		# prendo la lista completa dei links della rete
+		links_list = get_link(self, None)
+		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+		
+		# aggiungo i collegamenti al grafo
+		for edge in links:
+			if (edge[0] in switches) and (edge[1] in switches):
+				G.add_edge(edge[0], edge[1])
 
-	# aggiungo al grafo lo switch aggiunto e i suoi link entranti/uscenti
-	G.add_nodes_from(switches)
-	G.add_edges_from(links_no_port)
-
-	nx.draw(G)
-	plt.show()
-	print "switches: ", switches
-	print "links: ", links_no_port
+		# disegno il grafo
+		nx.draw(G)
+		plt.show()
+		print "switches: ", switches
+		print "links: ", links
 
     @set_ev_cls(topo_event.EventSwitchLeave)
     def new_topology(self, ev):
-	G.clear()
-	switch_list = get_switch(self, None)
-	switches = [switch.dp.id for switch in switch_list]
+		G.clear()
+		# prendo la lista completa degli switches della rete e li aggiungo al grafo
+		switch_list = get_switch(self, None)
+		switches = [switch.dp.id for switch in switch_list]
+		G.add_nodes_from(switches)
 
-	links_list = get_link(self, None)
-	links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
-	links_no_port = [i[:2] for i in links]
-    real_links = []
+		# prendo la lista completa dei links della rete
+		links_list = get_link(self, None)
+		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+		real_links = []
 
-	G.add_nodes_from(switches)
+		# aggiungo solo i collegamenti a nodi esistenti
+		for edge in links:
+			if (edge[0] in switches) and (edge[1] in switches):
+				G.add_edge(edge[0], edge[1])
+				real_links.append(edge)
 
-    for i in range(0, len(links_no_port)):
-        if (links_no_port[i][0] in switches) and (links_no_port[i][1] in switches):
-            real_links.append(links_no_port[i])
-	G.add_edges_from(real_links)
-
-	nx.draw(G)
-	plt.show()
-	print "switches: ", switches
-	print "links: ", links_no_port
+		# disegno il grafo
+		nx.draw(G)
+		plt.show()
+		print "switches: ", switches
+		print "links: ", real_links
