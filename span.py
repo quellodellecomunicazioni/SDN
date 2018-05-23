@@ -28,6 +28,7 @@ from ryu.topology import event as topo_event
 from ryu.topology.api import get_switch, get_link
 import networkx as nx
 import matplotlib.pyplot as plt
+import support as sp
 
 G = nx.Graph()
 
@@ -129,6 +130,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
     @set_ev_cls(topo_event.EventSwitchEnter)
     def get_topology_data(self, ev):
 		G.clear()
+		rules = {}
 		# prendo la lista completa degli switches della rete
 		switch_list = get_switch(self, None)
 		switches = [switch.dp.id for switch in switch_list]
@@ -144,14 +146,23 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 				G.add_edge(edge[0], edge[1])
 
 		# disegno il grafo
-		nx.draw(G)
-		plt.show()
+		#nx.draw(G)
+		#plt.show()
 		print "switches: ", switches
 		print "links: ", links
+
+		direct, indirect = sp.combinazioni(switches, links)
+		for test in direct:
+			rules = sp.regole_dirette(test, rules, links)
+		for test in indirect:
+			rules = sp.regole_indirette(test, rules, links)
+		for k,v in rules.iteritems():
+   			print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1]) 
 
     @set_ev_cls(topo_event.EventSwitchLeave)
     def new_topology(self, ev):
 		G.clear()
+		rules = {}
 		# prendo la lista completa degli switches della rete e li aggiungo al grafo
 		switch_list = get_switch(self, None)
 		switches = [switch.dp.id for switch in switch_list]
@@ -169,7 +180,16 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 				real_links.append(edge)
 
 		# disegno il grafo
-		nx.draw(G)
-		plt.show()
+		#nx.draw(G)
+		#plt.show()
 		print "switches: ", switches
 		print "links: ", real_links
+
+		direct, indirect = sp.combinazioni(switches, links)
+		for test in direct:
+			rules = sp.regole_dirette(test, rules, links)
+		for test in indirect:
+			rules = sp.regole_indirette(test, rules, links)
+		for k,v in rules.iteritems():
+   			print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1]) 
+		
