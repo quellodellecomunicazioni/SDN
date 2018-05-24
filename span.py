@@ -132,80 +132,69 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                           dpid_str, ev.port_no, of_state[ev.port_state])
 
     @set_ev_cls(topo_event.EventSwitchEnter)
-    def get_topology_data(self, ev):
+    def add_switch(self, ev):
 		new_switch = ev.switch.dp.id
 		G.add_node(new_switch)
 		switches = G.nodes()
-		#rules = {}
 		
 		# prendo la lista completa dei links della rete
 		links_list = get_link(self, None)
 		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+
 		# prendo la lista degli host
 		host_list = get_host(self, None)
 
 		# disegno il grafo
 		#nx.draw(G)
 		#plt.show()
+
 		print "switches: ", switches
 		print "hosts: ", host_list
 		print "Links: ", links
-	
-		#direct, indirect = sp.combinazioni(switches, links)
-		#for test in direct:
-		#	rules = sp.regole_dirette(test, rules, links)
-		#for test in indirect:
-		#	rules = sp.regole_indirette(test, rules, links)
-		#for k,v in rules.iteritems():
-   		#	print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1])
+		print "links del grafo: ", G.edges()
 
     @set_ev_cls(topo_event.EventSwitchLeave)
-    def new_topology(self, ev):
+    def remove_switch(self, ev):
 		old_switch = ev.switch.dp.id
 		G.remove_node(old_switch)
 		switches = G.nodes()
-		#rules = {}
-		# prendo la lista completa degli switches della rete e li aggiungo al grafo
 		
 		# prendo la lista completa dei links della rete
 		links_list = get_link(self, None)
 		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
 
+		# prendo la lista completa degli host della rete
 		host_list = get_host(self, None)
 		hosts = [host.mac for host in host_list]
 
 		# disegno il grafo
 		#nx.draw(G)
 		#plt.show()
+
 		print "switches: ", switches
 		print "links: ", links
 		print "hosts: ", hosts
-
-		#direct, indirect = sp.combinazioni(switches, links)
-		#for test in direct:
-		#	rules = sp.regole_dirette(test, rules, links)
-		#for test in indirect:
-		#	rules = sp.regole_indirette(test, rules, links)
-		#for k,v in rules.iteritems():
-   		#	print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1])
+		print "links grafo: ", G.edges()
 
     @set_ev_cls(topo_event.EventLinkAdd)
-    def nuovo_link(self, ev):
+    def add_link(self, ev):
 		new_link = ev.link
 		test = (new_link.src.dpid, new_link.dst.dpid)
+		mirror = (new_link.dst.dpid, new_link.src.dpid)
 		if test not in G.edges():
-			G.add_edge(new_link.src.dpid, new_link.dst.dpid)
-			links_list = get_link(self, None)
-			links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+			G.add_edge(*test)
+			print "Ho aggiunto il collegamento: ", test
+			print "I nuovi collegamenti sono: ", G.edges()
 
     @set_ev_cls(topo_event.EventLinkDelete)
-    def bye_link(self, ev):
+    def remove_link(self, ev):
 		old_link = ev.link
 		test = (old_link.src.dpid, old_link.dst.dpid)
+		mirror = (old_link.dst.dpid, old_link.src.dpid)
 		if test in G.edges():
 			G.remove_edge(*test)
-			links_list = get_link(self, None)
-			links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+			print "Ho rimosso il collegamento: ", test
+			print "I nuovi collegamenti sono: ", G.edges()
 
     #@set_ev_cls(topo_event.EventHostAdd)
     #def nuovo_host(self, ev):
