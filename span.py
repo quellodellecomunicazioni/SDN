@@ -20,12 +20,12 @@ from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib import dpid as dpid_lib
 from ryu.lib import stplib
-from ryu.lib.packet import packet
+from ryu.lib.packet import packet, ether_types
 from ryu.lib.packet import ethernet
 from ryu.app import simple_switch_13
 from ryu.topology import switches
 from ryu.topology import event as topo_event
-from ryu.topology.api import get_switch, get_link
+from ryu.topology.api import get_switch, get_link, get_host
 import networkx as nx
 import matplotlib.pyplot as plt
 import support as sp
@@ -74,13 +74,17 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
 
+        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
+            # ignore lldp packet
+            return
+
         dst = eth.dst
         src = eth.src
 
         dpid = datapath.id
         self.mac_to_port.setdefault(dpid, {})
 
-        self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+        #self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
         # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = in_port
@@ -129,67 +133,82 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 
     @set_ev_cls(topo_event.EventSwitchEnter)
     def get_topology_data(self, ev):
-		G.clear()
-		rules = {}
-		# prendo la lista completa degli switches della rete
-		switch_list = get_switch(self, None)
-		switches = [switch.dp.id for switch in switch_list]
-		G.add_nodes_from(switches)
-
+		new_switch = ev.switch.dp.id
+		G.add_node(new_switch)
+		switches = G.nodes()
+		#rules = {}
+		
 		# prendo la lista completa dei links della rete
 		links_list = get_link(self, None)
 		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+		# prendo la lista degli host
+		host_list = get_host(self, None)
+
+		# disegno il grafo
+		#nx.draw(G)
+		#plt.show()
+		print "switches: ", switches
+		print "hosts: ", host_list
+		print "Links: ", links
+	
+		#direct, indirect = sp.combinazioni(switches, links)
+		#for test in direct:
+		#	rules = sp.regole_dirette(test, rules, links)
+		#for test in indirect:
+		#	rules = sp.regole_indirette(test, rules, links)
+		#for k,v in rules.iteritems():
+   		#	print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1])
+
+    @set_ev_cls(topo_event.EventSwitchLeave)
+    def new_topology(self, ev):
+		old_switch = ev.switch.dp.id
+		G.remove_node(old_switch)
+		switches = G.nodes()
+		#rules = {}
+		# prendo la lista completa degli switches della rete e li aggiungo al grafo
 		
-		# aggiungo i collegamenti al grafo
-		for edge in links:
-			if (edge[0] in switches) and (edge[1] in switches):
-				G.add_edge(edge[0], edge[1])
+		# prendo la lista completa dei links della rete
+		links_list = get_link(self, None)
+		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
+
+		host_list = get_host(self, None)
+		hosts = [host.mac for host in host_list]
 
 		# disegno il grafo
 		#nx.draw(G)
 		#plt.show()
 		print "switches: ", switches
 		print "links: ", links
+		print "hosts: ", hosts
 
-		direct, indirect = sp.combinazioni(switches, links)
-		for test in direct:
-			rules = sp.regole_dirette(test, rules, links)
-		for test in indirect:
-			rules = sp.regole_indirette(test, rules, links)
-		for k,v in rules.iteritems():
-   			print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1]) 
+		#direct, indirect = sp.combinazioni(switches, links)
+		#for test in direct:
+		#	rules = sp.regole_dirette(test, rules, links)
+		#for test in indirect:
+		#	rules = sp.regole_indirette(test, rules, links)
+		#for k,v in rules.iteritems():
+   		#	print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1])
 
-    @set_ev_cls(topo_event.EventSwitchLeave)
-    def new_topology(self, ev):
-		G.clear()
-		rules = {}
-		# prendo la lista completa degli switches della rete e li aggiungo al grafo
-		switch_list = get_switch(self, None)
-		switches = [switch.dp.id for switch in switch_list]
-		G.add_nodes_from(switches)
+    @set_ev_cls(topo_event.EventLinkAdd)
+    def nuovo_link(self, ev):
+		new_link = ev.link
+		test = (new_link.src.dpid, new_link.dst.dpid)
+		if test not in G.edges():
+			G.add_edge(new_link.src.dpid, new_link.dst.dpid)
+			links_list = get_link(self, None)
+			links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
 
-		# prendo la lista completa dei links della rete
-		links_list = get_link(self, None)
-		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
-		real_links = []
+    @set_ev_cls(topo_event.EventLinkDelete)
+    def bye_link(self, ev):
+		old_link = ev.link
+		test = (old_link.src.dpid, old_link.dst.dpid)
+		if test in G.edges():
+			G.remove_edge(*test)
+			links_list = get_link(self, None)
+			links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
 
-		# aggiungo solo i collegamenti a nodi esistenti
-		for edge in links:
-			if (edge[0] in switches) and (edge[1] in switches):
-				G.add_edge(edge[0], edge[1])
-				real_links.append(edge)
-
-		# disegno il grafo
-		#nx.draw(G)
-		#plt.show()
-		print "switches: ", switches
-		print "links: ", real_links
-
-		direct, indirect = sp.combinazioni(switches, links)
-		for test in direct:
-			rules = sp.regole_dirette(test, rules, links)
-		for test in indirect:
-			rules = sp.regole_indirette(test, rules, links)
-		for k,v in rules.iteritems():
-   			print "path: " + str(k) + "  --->  next hop: " + str(v[0]) + ",  weight: " + str(v[1]) 
-		
+    #@set_ev_cls(topo_event.EventHostAdd)
+    #def nuovo_host(self, ev):
+	#	new_host = ev.host.mac
+	#	G.add_node(new_host)
+	#	print G.nodes()
