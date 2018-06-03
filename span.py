@@ -22,15 +22,14 @@ from ryu.lib import dpid as dpid_lib
 from ryu.lib import stplib
 from ryu.lib.packet import packet, ether_types
 from ryu.lib.packet import ethernet
+from ryu.lib.packet import arp
 from ryu.app import simple_switch_13
 from ryu.topology import switches
 from ryu.topology import event as topo_event
 from ryu.topology.api import get_switch, get_link, get_host
 import networkx as nx
 import matplotlib.pyplot as plt
-import support as sp
 
-G = nx.Graph()
 
 class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -40,7 +39,8 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.stp = kwargs['stplib']
-		
+        self.net = nx.DiGraph()
+
         # Sample of stplib config.
         #  please refer to stplib.Stp.set_config() for details.
         config = {dpid_lib.str_to_dpid('0000000000000001'):
@@ -73,6 +73,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
+        arp_pkt = pkt.get_protocol(arp.arp)
 
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             # ignore lldp packet
@@ -80,17 +81,30 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 
         dst = eth.dst
         src = eth.src
-
         dpid = datapath.id
-        self.mac_to_port.setdefault(dpid, {})
+
+        if arp_pkt:
+            if src not in self.net:
+                self.net.add_node(src)
+                self.net.add_edge(src,dpid)
+                #nx.draw(self.net)
+                #plt.show()
+                self.net.add_edge(dpid,src,port=in_port)
+                print "Ho aggiunto ", src
+                print "ora i nodi sono ", self.net.nodes()
+                print "ora i collegamenti sono ", self.net.edges()
 
         #self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
-        # learn a mac address to avoid FLOOD next time.
-        self.mac_to_port[dpid][src] = in_port
-
-        if dst in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][dst]
+        if dst in self.net:
+            try:
+                path = nx.shortest_path(self.net, src, dst)
+                next = path[path.index(dpid) + 1]
+                out_port = self.net[dpid][next]['port']
+                print "ho beccato lo shortest path ", path
+            except nx.NetworkXNoPath:
+                print "no path"
+                out_port = ofproto.OFPP_FLOOD
         else:
             out_port = ofproto.OFPP_FLOOD
 
@@ -133,71 +147,37 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
 
     @set_ev_cls(topo_event.EventSwitchEnter)
     def add_switch(self, ev):
-		new_switch = ev.switch.dp.id
-		G.add_node(new_switch)
-		switches = G.nodes()
-		
-		# prendo la lista completa dei links della rete
-		links_list = get_link(self, None)
-		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
-
-		# prendo la lista degli host
-		host_list = get_host(self, None)
-
-		# disegno il grafo
-		#nx.draw(G)
-		#plt.show()
-
-		print "switches: ", switches
-		print "hosts: ", host_list
-		print "Links: ", links
-		print "links del grafo: ", G.edges()
+        new_switch = ev.switch.dp.id
+        if new_switch not in self.net:
+            self.net.add_node(new_switch)
+            print "Ho aggiunto il nodo ", new_switch
+            print "Ora i nodi sono ", self.net.nodes()
 
     @set_ev_cls(topo_event.EventSwitchLeave)
     def remove_switch(self, ev):
-		old_switch = ev.switch.dp.id
-		G.remove_node(old_switch)
-		switches = G.nodes()
-		
-		# prendo la lista completa dei links della rete
-		links_list = get_link(self, None)
-		links=[(link.src.dpid,link.dst.dpid,{'port':link.src.port_no}) for link in links_list]
-
-		# prendo la lista completa degli host della rete
-		host_list = get_host(self, None)
-		hosts = [host.mac for host in host_list]
-
-		# disegno il grafo
-		#nx.draw(G)
-		#plt.show()
-
-		print "switches: ", switches
-		print "links: ", links
-		print "hosts: ", hosts
-		print "links grafo: ", G.edges()
-
-    @set_ev_cls(topo_event.EventLinkAdd)
-    def add_link(self, ev):
-		new_link = ev.link
-		test = (new_link.src.dpid, new_link.dst.dpid)
-		mirror = (new_link.dst.dpid, new_link.src.dpid)
-		if test not in G.edges():
-			G.add_edge(*test)
-			print "Ho aggiunto il collegamento: ", test
-			print "I nuovi collegamenti sono: ", G.edges()
+        old_switch = ev.switch.dp.id
+        if old_switch in self.net:
+            self.net.remove_node(old_switch)
+            print "Ho rimosso il nodo ", old_switch
+            print "Ora i nodi sono ", self.net.nodes()
 
     @set_ev_cls(topo_event.EventLinkDelete)
     def remove_link(self, ev):
-		old_link = ev.link
-		test = (old_link.src.dpid, old_link.dst.dpid)
-		mirror = (old_link.dst.dpid, old_link.src.dpid)
-		if test in G.edges():
-			G.remove_edge(*test)
-			print "Ho rimosso il collegamento: ", test
-			print "I nuovi collegamenti sono: ", G.edges()
+        old_link = ev.link
+        link = (old_link.src.dpid, old_link.dst.dpid)
+        mirror = (old_link.dst.dpid, old_link.src.dpid)
+        if link in self.net.edges():
+            self.net.remove_edge(*link)
+            self.net.remove_edge(*mirror)
+            print "Ho rimosso il collegamento ", link
+            print "e anche ", mirror
+            print "Ora i collegamenti sono: ", self.net.edges()
 
-    #@set_ev_cls(topo_event.EventHostAdd)
-    #def nuovo_host(self, ev):
-	#	new_host = ev.host.mac
-	#	G.add_node(new_host)
-	#	print G.nodes()
+    @set_ev_cls(topo_event.EventLinkAdd)
+    def add_link(self, ev):
+        new_link = ev.link
+        link = (new_link.src.dpid, new_link.dst.dpid)
+        if link not in self.net:
+            self.net.add_edge(new_link.src.dpid, new_link.dst.dpid, port=new_link.src.port_no)
+            print "Ho aggiunto il collegamento ", link
+            print "Ora i collegamenti sono: ", self.net.edges()
