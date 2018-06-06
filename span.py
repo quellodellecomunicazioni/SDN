@@ -119,7 +119,9 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                         match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
                         next = path[path.index(dpid) + 1]
                         out_port = self.net[dpid][next]['port']
-                        actions = [parser.OFPActionOutput(out_port)]
+                        actions = [parser.OFPActionPushMpls(),
+                                   parser.OFPActionSetField(mpls_label=label),
+                                   parser.OFPActionOutput(out_port)]
                         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
                         mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
                         datapath.send_msg(mod)
