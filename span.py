@@ -22,13 +22,14 @@ from ryu.lib import dpid as dpid_lib
 from ryu.lib import stplib
 from ryu.lib.packet import packet, ether_types
 from ryu.lib.packet import ethernet
-from ryu.lib.packet import arp
+from ryu.lib.packet import arp, mpls
 from ryu.app import simple_switch_13
 from ryu.topology import switches
 from ryu.topology import event as topo_event
 from ryu.topology.api import get_switch, get_link, get_host
 import networkx as nx
 import matplotlib.pyplot as plt
+import random
 
 
 class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
@@ -40,6 +41,9 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         self.mac_to_port = {}
         self.stp = kwargs['stplib']
         self.net = nx.DiGraph()
+        self.lsps = {}
+        self.label_list = []
+        self.path_list = []
 
         # Sample of stplib config.
         #  please refer to stplib.Stp.set_config() for details.
@@ -74,6 +78,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
         arp_pkt = pkt.get_protocol(arp.arp)
+        mpls_pkt = pkt.get_protocol(mpls.mpls)
 
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             # ignore lldp packet
@@ -83,30 +88,44 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         src = eth.src
         dpid = datapath.id
 
+        out_port = ofproto.OFPP_FLOOD
+
         if arp_pkt:
             if src not in self.net:
                 self.net.add_node(src)
                 self.net.add_edge(src,dpid)
-                #nx.draw(self.net)
-                #plt.show()
                 self.net.add_edge(dpid,src,port=in_port)
+                nx.draw(self.net, with_labels=True)
+                plt.savefig("grafo.png")
+                plt.clf()
                 print "Ho aggiunto ", src
                 print "ora i nodi sono ", self.net.nodes()
                 print "ora i collegamenti sono ", self.net.edges()
-
-        #self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
-
-        if dst in self.net:
-            try:
-                path = nx.shortest_path(self.net, src, dst)
-                next = path[path.index(dpid) + 1]
-                out_port = self.net[dpid][next]['port']
-                print "ho beccato lo shortest path ", path
-            except nx.NetworkXNoPath:
-                print "no path"
-                out_port = ofproto.OFPP_FLOOD
-        else:
+        elif mpls_pkt:
+            print "pacchetto MPLS"
             out_port = ofproto.OFPP_FLOOD
+        else:
+            if dst in (self.net) and (src in self.net):
+                try: 
+                    path = nx.shortest_path(self.net, src, dst)
+                    if path not in self.path_list:
+                        self.path_list.append(path)
+                        label = self.assign_label()
+                        self.lsps[str(label)] = nx.shortest_path(self.net, 
+                                                                 src, dst)
+                        for key,value in self.lsps.iteritems():
+                            print key,value
+                        print "----------------------"
+                        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                        next = path[path.index(dpid) + 1]
+                        out_port = self.net[dpid][next]['port']
+                        actions = [parser.OFPActionOutput(out_port)]
+                        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+                        mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                        datapath.send_msg(mod)
+                except nx.NetworkXNoPath: 
+                    print "no path"
+                    out_port = ofproto.OFPP_FLOOD
 
         actions = [parser.OFPActionOutput(out_port)]
 
@@ -122,6 +141,16 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+
+    def assign_label(self):
+        if not self.label_list:
+            new_label = random.randint(1, 1000)
+        else:
+            new_label = random.randint(1, 1000)
+            while new_label in self.label_list:
+                new_label = random.randint(1, 1000)
+        self.label_list.append(new_label)
+        return new_label
 
     @set_ev_cls(stplib.EventTopologyChange, MAIN_DISPATCHER)
     def _topology_change_handler(self, ev):
@@ -150,6 +179,9 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         new_switch = ev.switch.dp.id
         if new_switch not in self.net:
             self.net.add_node(new_switch)
+            nx.draw(self.net, with_labels=True)
+            plt.savefig("grafo.png")
+            plt.clf()
             print "Ho aggiunto il nodo ", new_switch
             print "Ora i nodi sono ", self.net.nodes()
 
@@ -158,6 +190,9 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         old_switch = ev.switch.dp.id
         if old_switch in self.net:
             self.net.remove_node(old_switch)
+            nx.draw(self.net, with_labels=True)
+            plt.savefig("grafo.png")
+            plt.clf()
             print "Ho rimosso il nodo ", old_switch
             print "Ora i nodi sono ", self.net.nodes()
 
@@ -169,6 +204,9 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         if link in self.net.edges():
             self.net.remove_edge(*link)
             self.net.remove_edge(*mirror)
+            nx.draw(self.net, with_labels=True)
+            plt.savefig("grafo.png")
+            plt.clf()
             print "Ho rimosso il collegamento ", link
             print "e anche ", mirror
             print "Ora i collegamenti sono: ", self.net.edges()
@@ -178,6 +216,10 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         new_link = ev.link
         link = (new_link.src.dpid, new_link.dst.dpid)
         if link not in self.net:
-            self.net.add_edge(new_link.src.dpid, new_link.dst.dpid, port=new_link.src.port_no)
+            self.net.add_edge(new_link.src.dpid, new_link.dst.dpid,
+                              port=new_link.src.port_no)
+            nx.draw(self.net, with_labels=True)
+            plt.savefig("grafo.png")
+            plt.clf()
             print "Ho aggiunto il collegamento ", link
             print "Ora i collegamenti sono: ", self.net.edges()
