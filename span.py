@@ -135,7 +135,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                             for key,value in self.lsps.iteritems():
                                 print key,value
                             print "----------------------"
-                            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, eth_dst=dst)
+                            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, eth_dst=dst, eth_src=src)
                             next = path[path.index(dpid) + 1]
                             out_port = self.net[dpid][next]['port']
                             actions = [parser.OFPActionPushMpls(),
