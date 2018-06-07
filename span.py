@@ -87,8 +87,8 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         dst = eth.dst
         src = eth.src
         dpid = datapath.id
-
         out_port = ofproto.OFPP_FLOOD
+        actions = [parser.OFPActionOutput(out_port)]
 
         if arp_pkt:
             if src not in self.net:
@@ -98,61 +98,55 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                 nx.draw(self.net, with_labels=True)
                 plt.savefig("grafo.png")
                 plt.clf()
-                print "Ho aggiunto ", src
-                print "ora i nodi sono ", self.net.nodes()
-                print "ora i collegamenti sono ", self.net.edges()
-        elif mpls_pkt:
-            print "pacchetto MPLS con etichetta #", mpls_pkt.label
+                #print "Ho aggiunto ", src
+                #print "ora i nodi sono ", self.net.nodes()
+                #print "ora i collegamenti sono ", self.net.edges()
+        if mpls_pkt:
             label = mpls_pkt.label
             lsp = self.lsps[str(label)]
-            print "ho un lsp ", lsp
             if dpid in lsp:
                 next = lsp[lsp.index(dpid) + 1]
-                if next != dst:
-                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
-                    out_port = self.net[dpid][next]['port']
-                    actions = [parser.OFPActionOutput(out_port)]
-                    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-                    mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
-                    datapath.send_msg(mod)
-                elif next == dst:
+                if next == dst:
                     match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
                     out_port = self.net[dpid][next]['port']
                     actions = [parser.OFPActionPopMpls(), parser.OFPActionOutput(out_port)]
                     inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
                     mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
                     datapath.send_msg(mod)
+                else:
+                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                    out_port = self.net[dpid][next]['port']
+                    actions = [parser.OFPActionOutput(out_port)]
+                    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                    datapath.send_msg(mod)
         else:
-            if dst in (self.net) and (src in self.net):
+            if (dst in self.net) and (src in self.net):
                 try: 
                     path = nx.shortest_path(self.net, src, dst)
-                    if path not in self.path_list:
-                        self.path_list.append(path)
-                        label = self.assign_label()
-                        self.lsps[str(label)] = nx.shortest_path(self.net, 
-                                                                 src, dst)
-                        for key,value in self.lsps.iteritems():
-                            print key,value
-                        print "----------------------"
-                        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, eth_dst=dst)
-                        next = path[path.index(dpid) + 1]
-                        out_port = self.net[dpid][next]['port']
-                        actions = [parser.OFPActionPushMpls(),
-                                   parser.OFPActionSetField(mpls_label=label),
-                                   parser.OFPActionOutput(out_port)]
-                        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-                        mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
-                        datapath.send_msg(mod)
+                    if dpid in path:
+                        if path[path.index(dpid)+1] == dst:
+                            out_port = self.net[dpid][dst]['port']
+                            actions = [parser.OFPActionOutput(out_port)]
+                        elif path not in self.path_list:
+                            self.path_list.append(path)
+                            label = self.assign_label()
+                            self.lsps[str(label)] = path
+                            for key,value in self.lsps.iteritems():
+                                print key,value
+                            print "----------------------"
+                            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, eth_dst=dst)
+                            next = path[path.index(dpid) + 1]
+                            out_port = self.net[dpid][next]['port']
+                            actions = [parser.OFPActionPushMpls(),
+                                       parser.OFPActionSetField(mpls_label=label),
+                                       parser.OFPActionOutput(out_port)]
+                            inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+                            mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                            datapath.send_msg(mod)
                 except nx.NetworkXNoPath: 
                     print "no path"
                     out_port = ofproto.OFPP_FLOOD
-
-        actions = [parser.OFPActionOutput(out_port)]
-
-        # install a flow to avoid packet_in next time
-        if out_port != ofproto.OFPP_FLOOD:
-            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-            self.add_flow(datapath, 1, match, actions)
 
         data = None
         if msg.buffer_id == ofproto.OFP_NO_BUFFER:
