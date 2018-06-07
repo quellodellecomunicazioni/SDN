@@ -102,8 +102,26 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                 print "ora i nodi sono ", self.net.nodes()
                 print "ora i collegamenti sono ", self.net.edges()
         elif mpls_pkt:
-            print "pacchetto MPLS"
-            out_port = ofproto.OFPP_FLOOD
+            print "pacchetto MPLS con etichetta #", mpls_pkt.label
+            label = mpls_pkt.label
+            lsp = self.lsps[str(label)]
+            print "ho un lsp ", lsp
+            if dpid in lsp:
+                next = lsp[lsp.index(dpid) + 1]
+                if next != dst:
+                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                    out_port = self.net[dpid][next]['port']
+                    actions = [parser.OFPActionOutput(out_port)]
+                    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                    datapath.send_msg(mod)
+                elif next == dst:
+                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                    out_port = self.net[dpid][next]['port']
+                    actions = [parser.OFPActionPopMpls(), parser.OFPActionOutput(out_port)]
+                    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                    datapath.send_msg(mod)
         else:
             if dst in (self.net) and (src in self.net):
                 try: 
@@ -116,7 +134,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                         for key,value in self.lsps.iteritems():
                             print key,value
                         print "----------------------"
-                        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, eth_dst=dst)
                         next = path[path.index(dpid) + 1]
                         out_port = self.net[dpid][next]['port']
                         actions = [parser.OFPActionPushMpls(),
