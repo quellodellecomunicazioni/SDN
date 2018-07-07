@@ -1,18 +1,3 @@
-# Copyright (C) 2016 Nippon Telegraph and Telephone Corporation.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-# implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
@@ -26,7 +11,6 @@ from ryu.lib.packet import arp, mpls
 from ryu.app import simple_switch_13
 from ryu.topology import switches
 from ryu.topology import event as topo_event
-from ryu.topology.api import get_switch, get_link, get_host
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
@@ -55,18 +39,6 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                   {'bridge': {'priority': 0xa000}}}
         self.stp.set_config(config)
 
-    def delete_flow(self, datapath):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
-        for dst in self.mac_to_port[datapath.id].keys():
-            match = parser.OFPMatch(eth_dst=dst)
-            mod = parser.OFPFlowMod(
-                datapath, command=ofproto.OFPFC_DELETE,
-                out_port=ofproto.OFPP_ANY, out_group=ofproto.OFPG_ANY,
-                priority=1, match=match)
-            datapath.send_msg(mod)
-
     @set_ev_cls(stplib.EventPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         msg = ev.msg
@@ -87,6 +59,7 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
         dst = eth.dst
         src = eth.src
         dpid = datapath.id
+
         out_port = ofproto.OFPP_FLOOD
         actions = [parser.OFPActionOutput(out_port)]
 
@@ -98,31 +71,42 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                 nx.draw(self.net, with_labels=True)
                 plt.savefig("grafo.png")
                 plt.clf()
-                #print "Ho aggiunto ", src
-                #print "ora i nodi sono ", self.net.nodes()
-                #print "ora i collegamenti sono ", self.net.edges()
         if mpls_pkt:
             label = mpls_pkt.label
             lsp = self.lsps[str(label)]
             if dpid in lsp:
                 next = lsp[lsp.index(dpid) + 1]
                 if next == dst:
-                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                    match = parser.OFPMatch(
+                                        eth_type=ether_types.ETH_TYPE_MPLS,
+                                        mpls_label=label)
                     out_port = self.net[dpid][next]['port']
-                    actions = [parser.OFPActionPopMpls(), parser.OFPActionOutput(out_port)]
-                    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-                    mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                    actions = [parser.OFPActionPopMpls(),
+                               parser.OFPActionOutput(out_port)]
+                    inst = [
+                        parser.OFPInstructionActions(
+                                        ofproto.OFPIT_APPLY_ACTIONS, actions)
+                    ]
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=2,
+                                            match=match, instructions=inst)
                     datapath.send_msg(mod)
                 else:
-                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_MPLS, mpls_label=label)
+                    match = parser.OFPMatch(
+                                        eth_type=ether_types.ETH_TYPE_MPLS,
+                                        mpls_label=label
+                    )
                     out_port = self.net[dpid][next]['port']
                     actions = [parser.OFPActionOutput(out_port)]
-                    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-                    mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                    inst = [
+                        parser.OFPInstructionActions(
+                                        ofproto.OFPIT_APPLY_ACTIONS, actions)
+                    ]
+                    mod = parser.OFPFlowMod(datapath=datapath, priority=2,
+                                            match=match, instructions=inst)
                     datapath.send_msg(mod)
         else:
             if (dst in self.net) and (src in self.net):
-                try: 
+                try:
                     path = nx.shortest_path(self.net, src, dst)
                     if dpid in path:
                         if path[path.index(dpid)+1] == dst:
@@ -132,27 +116,32 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                             self.path_list.append(path)
                             label = self.assign_label()
                             self.lsps[str(label)] = path
-                            for key,value in self.lsps.iteritems():
-                                print key,value
-                            print "----------------------"
-                            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, eth_dst=dst, eth_src=src)
+                            match = parser.OFPMatch(
+                                            eth_type=ether_types.ETH_TYPE_IP,
+                                            eth_dst=dst, eth_src=src)
                             next = path[path.index(dpid) + 1]
                             out_port = self.net[dpid][next]['port']
-                            actions = [parser.OFPActionPushMpls(),
-                                       parser.OFPActionSetField(mpls_label=label),
-                                       parser.OFPActionOutput(out_port)]
-                            inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-                            mod = parser.OFPFlowMod(datapath=datapath, priority=2, match=match, instructions=inst)
+                            actions = [
+                                parser.OFPActionPushMpls(),
+                                parser.OFPActionSetField(mpls_label=label),
+                                parser.OFPActionOutput(out_port)
+                            ]
+                            inst = [
+                                parser.OFPInstructionActions(
+                                                ofproto.OFPIT_APPLY_ACTIONS,
+                                                actions)
+                            ]
+                            mod = parser.OFPFlowMod(datapath=datapath,
+                                  priority=2, match=match, instructions=inst)
                             datapath.send_msg(mod)
-                except nx.NetworkXNoPath: 
-                    print "no path"
+                except nx.NetworkXNoPath:
                     out_port = ofproto.OFPP_FLOOD
 
         data = None
         if msg.buffer_id == ofproto.OFP_NO_BUFFER:
             data = msg.data
 
-        out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
+        out = parser.OFPPacketOut(datapath=datapath,buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
 
@@ -165,17 +154,6 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
                 new_label = random.randint(1, 1000)
         self.label_list.append(new_label)
         return new_label
-
-    @set_ev_cls(stplib.EventTopologyChange, MAIN_DISPATCHER)
-    def _topology_change_handler(self, ev):
-        dp = ev.dp
-        dpid_str = dpid_lib.dpid_to_str(dp.id)
-        msg = 'Receive topology change event. Flush MAC table.'
-        self.logger.debug("[dpid=%s] %s", dpid_str, msg)
-
-        if dp.id in self.mac_to_port:
-            self.delete_flow(dp)
-            del self.mac_to_port[dp.id]
 
     @set_ev_cls(stplib.EventPortStateChange, MAIN_DISPATCHER)
     def _port_state_change_handler(self, ev):
@@ -196,19 +174,23 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
             nx.draw(self.net, with_labels=True)
             plt.savefig("grafo.png")
             plt.clf()
-            print "Ho aggiunto il nodo ", new_switch
-            print "Ora i nodi sono ", self.net.nodes()
 
     @set_ev_cls(topo_event.EventSwitchLeave)
     def remove_switch(self, ev):
         old_switch = ev.switch.dp.id
+        to_remove = []
+        for link in self.net.edges():
+            if link[0] == old_switch:
+                if len(str(link[1])) == 17:
+                    to_remove.append(link[1])
+        for node in to_remove:
+            if node in self.net:
+                self.net.remove_node(node)
         if old_switch in self.net:
             self.net.remove_node(old_switch)
             nx.draw(self.net, with_labels=True)
             plt.savefig("grafo.png")
             plt.clf()
-            print "Ho rimosso il nodo ", old_switch
-            print "Ora i nodi sono ", self.net.nodes()
 
     @set_ev_cls(topo_event.EventLinkDelete)
     def remove_link(self, ev):
@@ -221,9 +203,6 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
             nx.draw(self.net, with_labels=True)
             plt.savefig("grafo.png")
             plt.clf()
-            print "Ho rimosso il collegamento ", link
-            print "e anche ", mirror
-            print "Ora i collegamenti sono: ", self.net.edges()
 
     @set_ev_cls(topo_event.EventLinkAdd)
     def add_link(self, ev):
@@ -235,5 +214,3 @@ class SimpleSwitch13(simple_switch_13.SimpleSwitch13):
             nx.draw(self.net, with_labels=True)
             plt.savefig("grafo.png")
             plt.clf()
-            print "Ho aggiunto il collegamento ", link
-            print "Ora i collegamenti sono: ", self.net.edges()
