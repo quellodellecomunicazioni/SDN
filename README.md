@@ -1,7 +1,3 @@
-# SPAN.PY
-Proactive spanning tree dislocation. 
-Rules are stored in a dictionary of the following kind
-RULES = { (SRC, DST): [ NEXT_HOP, WEIGHT] }
-
-# SUPPORT.PY
-Useful functions for the code. 
+# CENTRALISED LEARNING SWITCH
+Centralised learning switch that first proactively dislocates a proactive Spanning Tree and then uses MPLS to forward traffic.
+Based on simple_switch13_stp
